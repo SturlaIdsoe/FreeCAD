@@ -4,6 +4,7 @@
 #include <QByteArray>
 #include <QMainWindow>
 #include <QPointer>
+#include <QStyle>
 #include <QTimer>
 
 #include <string>
