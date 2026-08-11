@@ -20,11 +20,12 @@
  *                                                                         *
  ***************************************************************************/
 
-
 #pragma once
 
 #include <Gui/PropertyPage.h>
 #include <memory>
+
+class QComboBox;
 
 namespace Gui
 {
@@ -35,10 +36,6 @@ namespace Dialog
 {
 class Ui_DlgSettingsUI;
 
-/**
- * The DlgSettingsUI class implements a preference page to change theme settings.
- * @author Pierre-Louis Boyer
- */
 class DlgSettingsUI: public PreferencePage
 {
     Q_OBJECT
@@ -67,6 +64,8 @@ protected:
 
 private:
     std::unique_ptr<Ui_DlgSettingsUI> ui;
+    QComboBox* interfaceModeCombo = nullptr;
+    QComboBox* modernThemeCombo = nullptr;
 };
 
 }  // namespace Dialog
