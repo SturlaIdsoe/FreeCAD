@@ -39,6 +39,7 @@
 
 #include <Base/ServiceProvider.h>
 
+
 using namespace Gui::Dialog;
 
 namespace
@@ -59,6 +60,10 @@ Q_COREAPP_STARTUP_FUNCTION(initializeModernUI)
 
 /* TRANSLATOR Gui::Dialog::DlgSettingsUI */
 
+/**
+ *  Constructs a DlgSettingsUI which is a child of 'parent', with the
+ *  name 'name' and widget flags set to 'f'
+ */
 DlgSettingsUI::DlgSettingsUI(QWidget* parent)
     : PreferencePage(parent)
     , ui(new Ui_DlgSettingsUI)
@@ -88,6 +93,9 @@ DlgSettingsUI::DlgSettingsUI(QWidget* parent)
     connect(ui->themeEditorButton, &QPushButton::clicked, [this]() { openThemeEditor(); });
 }
 
+/**
+ *  Destroys the object and frees any allocated resources
+ */
 DlgSettingsUI::~DlgSettingsUI() = default;
 
 void DlgSettingsUI::saveSettings()
@@ -180,7 +188,7 @@ void DlgSettingsUI::loadSettings()
 
 void DlgSettingsUI::loadStyleSheet()
 {
-    static std::string translatedString;
+    static std::string translatedString;  // Make sure the memory doesn't disappear on us
     translatedString = tr("No style sheet").toStdString();
     populateStylesheets("StyleSheet", "qss", ui->StyleSheets, translatedString.c_str());
     populateStylesheets("OverlayActiveStyleSheet", "overlay", ui->OverlayStyleSheets, "Auto");
@@ -197,6 +205,7 @@ void DlgSettingsUI::populateStylesheets(
     auto hGrp = App::GetApplication().GetParameterGroupByPath(
         "User parameter:BaseApp/Preferences/MainWindow"
     );
+    // List all .qss/.css files
     QMap<QString, QString> cssFiles;
     QDir dir;
     if (filter.isEmpty()) {
@@ -205,6 +214,7 @@ void DlgSettingsUI::populateStylesheets(
     }
     QFileInfoList fileNames;
 
+    // read from user, resource and built-in directory
     QStringList qssPaths = QDir::searchPaths(QString::fromUtf8(path));
     for (QStringList::iterator it = qssPaths.begin(); it != qssPaths.end(); ++it) {
         dir.setPath(*it);
@@ -217,6 +227,8 @@ void DlgSettingsUI::populateStylesheets(
     }
 
     combo->clear();
+
+    // now add all unique items
     combo->addItem(tr(def), QStringLiteral(""));
     for (QMap<QString, QString>::iterator it = cssFiles.begin(); it != cssFiles.end(); ++it) {
         combo->addItem(it.key(), it.value());
@@ -225,6 +237,7 @@ void DlgSettingsUI::populateStylesheets(
     QString selectedStyleSheet = QString::fromUtf8(hGrp->GetASCII(key).c_str());
     int index = combo->findData(selectedStyleSheet);
 
+    // might be an absolute path name
     if (index < 0 && !selectedStyleSheet.isEmpty()) {
         QFileInfo fi(selectedStyleSheet);
         if (fi.isAbsolute()) {
@@ -249,6 +262,9 @@ void DlgSettingsUI::openThemeEditor()
     editor.exec();
 }
 
+/**
+ * Sets the strings of the subwidgets using the current language.
+ */
 void DlgSettingsUI::changeEvent(QEvent* e)
 {
     if (e->type() == QEvent::LanguageChange) {
