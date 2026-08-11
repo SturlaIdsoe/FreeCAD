@@ -20,44 +20,93 @@
  *                                                                         *
  ***************************************************************************/
 
+#include <QComboBox>
+#include <QCoreApplication>
+#include <QFormLayout>
+#include <QGroupBox>
 #include <QPushButton>
-
+#include <QTimer>
 
 #include <Gui/Application.h>
+#include <Gui/MainWindow.h>
 #include <Gui/ParamHandler.h>
 
 #include "DlgSettingsUI.h"
 #include "ui_DlgSettingsUI.h"
 
 #include "Dialogs/DlgThemeEditor.h"
+#include "ModernUI/ModernUIController.h"
 
 #include <Base/ServiceProvider.h>
 
-
 using namespace Gui::Dialog;
+
+namespace
+{
+void initializeModernUI()
+{
+    // Q_COREAPP_STARTUP_FUNCTION runs while QApplication is being constructed.
+    // Defer until the event loop starts, by which point FreeCAD's MainWindow exists.
+    QTimer::singleShot(0, qApp, []() {
+        if (auto* mainWindow = Gui::MainWindow::getInstance()) {
+            Gui::ModernUI::ModernUIController::instance().initialize(mainWindow);
+        }
+    });
+}
+
+Q_COREAPP_STARTUP_FUNCTION(initializeModernUI)
+}  // namespace
 
 /* TRANSLATOR Gui::Dialog::DlgSettingsUI */
 
-/**
- *  Constructs a DlgSettingsUI which is a child of 'parent', with the
- *  name 'name' and widget flags set to 'f'
- */
 DlgSettingsUI::DlgSettingsUI(QWidget* parent)
     : PreferencePage(parent)
     , ui(new Ui_DlgSettingsUI)
 {
     ui->setupUi(this);
 
+    auto* interfaceGroup = new QGroupBox(tr("Interface"), this);
+    auto* interfaceLayout = new QFormLayout(interfaceGroup);
+
+    interfaceModeCombo = new QComboBox(interfaceGroup);
+    interfaceModeCombo->addItem(tr("Classic FreeCAD"), QStringLiteral("Classic"));
+    interfaceModeCombo->addItem(tr("Modern"), QStringLiteral("Modern"));
+    interfaceModeCombo->setToolTip(
+        tr("Switch between the original FreeCAD interface and the modern interface. "
+           "Each mode keeps its own main-window layout.")
+    );
+    interfaceLayout->addRow(tr("Interface mode"), interfaceModeCombo);
+
+    modernThemeCombo = new QComboBox(interfaceGroup);
+    modernThemeCombo->addItem(tr("Dark"), QStringLiteral("Dark"));
+    modernThemeCombo->addItem(tr("Light"), QStringLiteral("Light"));
+    modernThemeCombo->setToolTip(tr("Color foundation used by the modern interface."));
+    interfaceLayout->addRow(tr("Modern theme"), modernThemeCombo);
+
+    ui->verticalLayout->insertWidget(0, interfaceGroup);
+
     connect(ui->themeEditorButton, &QPushButton::clicked, [this]() { openThemeEditor(); });
 }
 
-/**
- *  Destroys the object and frees any allocated resources
- */
 DlgSettingsUI::~DlgSettingsUI() = default;
 
 void DlgSettingsUI::saveSettings()
 {
+    auto modernUi = App::GetApplication().GetParameterGroupByPath(
+        "User parameter:BaseApp/Preferences/ModernUI"
+    );
+    const auto mode = interfaceModeCombo->currentData().toString();
+    const auto theme = modernThemeCombo->currentData().toString();
+    modernUi->SetASCII("InterfaceMode", mode.toLatin1().constData());
+    modernUi->SetASCII("ThemeVariant", theme.toLatin1().constData());
+
+    auto& controller = Gui::ModernUI::ModernUIController::instance();
+    controller.setThemeVariant(theme.toLatin1().constData());
+    controller.setMode(
+        mode == QStringLiteral("Modern") ? Gui::ModernUI::InterfaceMode::Modern
+                                          : Gui::ModernUI::InterfaceMode::Classic
+    );
+
     // Theme
     ui->ThemeAccentColor1->onSave();
     ui->ThemeAccentColor2->onSave();
@@ -89,6 +138,17 @@ void DlgSettingsUI::saveSettings()
 
 void DlgSettingsUI::loadSettings()
 {
+    auto modernUi = App::GetApplication().GetParameterGroupByPath(
+        "User parameter:BaseApp/Preferences/ModernUI"
+    );
+    const QString mode = QString::fromLatin1(modernUi->GetASCII("InterfaceMode", "Classic").c_str());
+    const QString theme = QString::fromLatin1(modernUi->GetASCII("ThemeVariant", "Dark").c_str());
+
+    int modeIndex = interfaceModeCombo->findData(mode);
+    interfaceModeCombo->setCurrentIndex(modeIndex >= 0 ? modeIndex : 0);
+    int themeIndex = modernThemeCombo->findData(theme);
+    modernThemeCombo->setCurrentIndex(themeIndex >= 0 ? themeIndex : 0);
+
     // Theme
     ui->ThemeAccentColor1->onRestore();
     ui->ThemeAccentColor2->onRestore();
@@ -120,7 +180,7 @@ void DlgSettingsUI::loadSettings()
 
 void DlgSettingsUI::loadStyleSheet()
 {
-    static std::string translatedString;  // Make sure the memory doesn't disappear on us
+    static std::string translatedString;
     translatedString = tr("No style sheet").toStdString();
     populateStylesheets("StyleSheet", "qss", ui->StyleSheets, translatedString.c_str());
     populateStylesheets("OverlayActiveStyleSheet", "overlay", ui->OverlayStyleSheets, "Auto");
@@ -137,7 +197,6 @@ void DlgSettingsUI::populateStylesheets(
     auto hGrp = App::GetApplication().GetParameterGroupByPath(
         "User parameter:BaseApp/Preferences/MainWindow"
     );
-    // List all .qss/.css files
     QMap<QString, QString> cssFiles;
     QDir dir;
     if (filter.isEmpty()) {
@@ -146,7 +205,6 @@ void DlgSettingsUI::populateStylesheets(
     }
     QFileInfoList fileNames;
 
-    // read from user, resource and built-in directory
     QStringList qssPaths = QDir::searchPaths(QString::fromUtf8(path));
     for (QStringList::iterator it = qssPaths.begin(); it != qssPaths.end(); ++it) {
         dir.setPath(*it);
@@ -159,8 +217,6 @@ void DlgSettingsUI::populateStylesheets(
     }
 
     combo->clear();
-
-    // now add all unique items
     combo->addItem(tr(def), QStringLiteral(""));
     for (QMap<QString, QString>::iterator it = cssFiles.begin(); it != cssFiles.end(); ++it) {
         combo->addItem(it.key(), it.value());
@@ -169,7 +225,6 @@ void DlgSettingsUI::populateStylesheets(
     QString selectedStyleSheet = QString::fromUtf8(hGrp->GetASCII(key).c_str());
     int index = combo->findData(selectedStyleSheet);
 
-    // might be an absolute path name
     if (index < 0 && !selectedStyleSheet.isEmpty()) {
         QFileInfo fi(selectedStyleSheet);
         if (fi.isAbsolute()) {
@@ -194,9 +249,6 @@ void DlgSettingsUI::openThemeEditor()
     editor.exec();
 }
 
-/**
- * Sets the strings of the subwidgets using the current language.
- */
 void DlgSettingsUI::changeEvent(QEvent* e)
 {
     if (e->type() == QEvent::LanguageChange) {
